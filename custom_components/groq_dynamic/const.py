@@ -6,7 +6,7 @@ CONF_MODEL = "model"
 CONF_MAX_TOKENS = "max_tokens"
 CONF_TEMPERATURE = "temperature"
 
-DEFAULT_MODEL = "llama-3.3-70b-versatile" # Model fallback nếu không lấy được list
+DEFAULT_MODEL = "llama-3.3-70b-versatile" 
 DEFAULT_MAX_TOKENS = 1024
 DEFAULT_TEMPERATURE = 0.7
 
