@@ -17,7 +17,7 @@ Integration mạnh mẽ tích hợp Groq Cloud API vào Home Assistant, biến n
 ### Qua HACS (Khuyên dùng)
 1.  Vào HACS > Integrations > Menu (3 chấm góc trên) > **Custom repositories**.
 2.  Dán đường dẫn kho lưu trữ này vào: `https://github.com/trankhanhduy2929-beep/ha-groq-dynamic`
-    *(Thay `USERNAME` bằng tên tài khoản GitHub của bạn)*
+
 3.  Chọn Category: **Integration**.
 4.  Nhấn **Add**, sau đó tìm "Groq Dynamic AI" và cài đặt.
 5.  Khởi động lại Home Assistant.
@@ -119,4 +119,5 @@ Tác giả: KHÁNH DUY
 =======
 Tác giả: KHÁNH DUY
 >>>>>>> c601e6fe70626236f70a9da29912fee5c4fbe734
+
 
