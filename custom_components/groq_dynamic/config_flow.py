@@ -21,7 +21,7 @@ async def validate_api_key(session, api_key):
                 _LOGGER.error("Groq API Error: %s", await response.text())
                 return None
             data = await response.json()
-            # Trả về danh sách ID của các model
+           
             return [model["id"] for model in data.get("data", [])]
     except Exception as e:
         _LOGGER.exception("Connection error")
@@ -38,7 +38,7 @@ class GroqConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             models = await validate_api_key(session, user_input[CONF_API_KEY])
             
             if models:
-                # Lưu danh sách model vào data để dùng sau này (hoặc chỉ lưu key)
+                
                 return self.async_create_entry(
                     title="Groq AI", 
                     data={
@@ -73,7 +73,7 @@ class GroqOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        # Lấy lại danh sách model mới nhất mỗi khi mở cấu hình
+        
         api_key = self.config_entry.data.get(CONF_API_KEY)
         session = async_get_clientsession(self.hass)
         models = await validate_api_key(session, api_key)
