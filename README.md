@@ -114,4 +114,8 @@ action:
     data:
       agent_id: conversation.groq_agent
       text: "Mô tả bức ảnh này: /config/www/snapshot_last_motion.jpg"
+<<<<<<< HEAD
 Tác giả: KHÁNH DUY
+=======
+Tác giả: KHÁNH DUY
+>>>>>>> c601e6fe70626236f70a9da29912fee5c4fbe734
