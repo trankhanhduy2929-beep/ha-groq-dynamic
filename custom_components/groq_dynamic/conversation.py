@@ -14,7 +14,8 @@ from homeassistant.const import MATCH_ALL
 
 from .const import (
     DOMAIN, CONF_API_KEY, CONF_MODEL, CONF_MAX_TOKENS, CONF_TEMPERATURE,
-    DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE, BASE_URL
+    CONF_System_PROMPT, CONF_SELECTED_ENTITIES,
+    DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE, DEFAULT_SYSTEM_PROMPT, BASE_URL
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     async_add_entities([agent])
 
 class GroqConversationEntity(conversation.ConversationEntity):
-    """Groq Agent: Text + Camera + URL + Local File."""
+    """Groq Agent Ultimate: Vision + Control + Custom Prompt."""
 
     def __init__(self, entry: ConfigEntry):
         self.entry = entry
@@ -35,82 +36,90 @@ class GroqConversationEntity(conversation.ConversationEntity):
     def supported_languages(self) -> list[str] | str:
         return MATCH_ALL
 
-    async def async_process(
-        self, user_input: conversation.ConversationInput
-    ) -> conversation.ConversationResult:
+    async def async_process(self, user_input: conversation.ConversationInput) -> conversation.ConversationResult:
         hass = self.hass
         api_key = self.entry.data[CONF_API_KEY]
+        
+        # Lấy cấu hình từ Options Flow
         model = self.entry.options.get(CONF_MODEL, self.entry.data.get(CONF_MODEL))
+        system_instruction = self.entry.options.get(CONF_System_PROMPT, DEFAULT_SYSTEM_PROMPT)
+        selected_entities = self.entry.options.get(CONF_SELECTED_ENTITIES, [])
+        
         user_text = user_input.text
-        
         encoded_image = None
-        image_source_info = ""
-
-        # --- ƯU TIÊN 1: TÌM URL HOẶC FILE PATH TRONG TEXT ---
-        # Regex tìm link http hoặc đường dẫn tuyệt đối bắt đầu bằng /
-        # Ví dụ: https://...jpg hoặc /config/www/...jpg
-        url_pattern = re.search(r'(https?://\S+|/\S+\.(?:jpg|jpeg|png))', user_text, re.IGNORECASE)
         
+        # --- 1. XỬ LÝ VISION (URL / FILE / CAMERA) ---
+        # A. Tìm URL hoặc File path
+        url_pattern = re.search(r'(https?://\S+|/\S+\.(?:jpg|jpeg|png))', user_text, re.IGNORECASE)
         if url_pattern:
-            path_or_url = url_pattern.group(0)
-            _LOGGER.info(f"Phát hiện ảnh từ nguồn: {path_or_url}")
-            
+            path = url_pattern.group(0)
             try:
-                # Xử lý nếu là URL Online
-                if path_or_url.startswith("http"):
+                if path.startswith("http"):
                     async with aiohttp.ClientSession() as session:
-                        async with session.get(path_or_url) as resp:
+                        async with session.get(path) as resp:
                             if resp.status == 200:
-                                image_data = await resp.read()
-                                encoded_image = base64.b64encode(image_data).decode("utf-8")
-                                image_source_info = " (ảnh từ URL)"
-                
-                # Xử lý nếu là File Local (trong thư mục config)
-                elif path_or_url.startswith("/"):
-                    # Kiểm tra file có tồn tại không
-                    if os.path.exists(path_or_url):
-                        def read_file():
-                            with open(path_or_url, "rb") as f:
-                                return f.read()
-                        image_data = await hass.async_add_executor_job(read_file)
-                        encoded_image = base64.b64encode(image_data).decode("utf-8")
-                        image_source_info = " (ảnh từ file local)"
-                    else:
-                        _LOGGER.warning(f"File không tồn tại: {path_or_url}")
-
+                                encoded_image = base64.b64encode(await resp.read()).decode("utf-8")
+                elif path.startswith("/") and os.path.exists(path):
+                     encoded_image = base64.b64encode(await hass.async_add_executor_job(lambda: open(path, "rb").read())).decode("utf-8")
             except Exception as e:
-                _LOGGER.error(f"Lỗi đọc ảnh từ URL/File: {e}")
+                _LOGGER.error(f"Lỗi đọc ảnh: {e}")
 
-        # --- ƯU TIÊN 2: NẾU KHÔNG CÓ URL, TÌM CAMERA ---
+        # B. Nếu không có URL, tìm Camera Entity
         if not encoded_image:
-            all_cameras = hass.states.async_all("camera")
-            user_text_lower = user_text.lower()
-            for cam in all_cameras:
-                friendly = cam.attributes.get("friendly_name", "").lower()
-                eid = cam.entity_id.lower()
-                if (friendly and friendly in user_text_lower) or (eid in user_text_lower):
+            # Ưu tiên tìm trong selected_entities trước nếu có
+            target_cameras = [e for e in selected_entities if e.startswith("camera.")] if selected_entities else []
+            if not target_cameras:
+                target_cameras = [s.entity_id for s in hass.states.async_all("camera")]
+            
+            for cam_id in target_cameras:
+                state = hass.states.get(cam_id)
+                if not state: continue
+                # Nếu ID hoặc tên camera có trong câu lệnh
+                if cam_id in user_text or (state.name and state.name.lower() in user_text.lower()):
                     try:
-                        image = await camera.async_get_image(hass, cam.entity_id)
-                        encoded_image = base64.b64encode(image.content).decode("utf-8")
-                        image_source_info = f" (từ camera {cam.entity_id})"
+                        img = await camera.async_get_image(hass, cam_id)
+                        encoded_image = base64.b64encode(img.content).decode("utf-8")
                         break
                     except Exception as e:
-                        _LOGGER.error(f"Lỗi chụp camera: {e}")
+                        _LOGGER.error(f"Lỗi chụp camera {cam_id}: {e}")
 
-        # --- TẠO SYSTEM PROMPT ---
-        system_prompt = "Bạn là trợ lý AI thông minh."
-        if encoded_image:
-            system_prompt += f" Người dùng đang gửi kèm một bức ảnh{image_source_info}. Hãy trả lời dựa trên ảnh đó."
+        # --- 2. XÂY DỰNG CONTEXT THIẾT BỊ ---
+        device_states = []
         
-        # Danh sách thiết bị (giữ nguyên tính năng điều khiển)
-        domains = ["light", "switch", "fan", "cover", "climate"]
-        states = hass.states.async_all()
-        devs = [f"{s.name} ({s.entity_id}): {s.state}" for s in states if s.domain in domains][:50]
-        system_prompt += f"\nThiết bị: {', '.join(devs)}"
-        system_prompt += '\nNếu cần điều khiển, trả về JSON: {"domain": "...", "service": "...", "target": ["..."], "response": "..."}'
+        if selected_entities:
+            # Nếu người dùng đã chọn thiết bị trong Cấu hình -> Chỉ dùng danh sách này (Tối ưu nhất)
+            for entity_id in selected_entities:
+                state = hass.states.get(entity_id)
+                if state:
+                    device_states.append(f"{state.name} ({entity_id}): {state.state}")
+        else:
+            # Fallback: Nếu không chọn gì, lấy mặc định (giới hạn 50 cái)
+            domains = ["light", "switch", "fan", "cover", "climate", "lock"]
+            all_states = hass.states.async_all()
+            for s in all_states:
+                if s.domain in domains:
+                    device_states.append(f"{s.name} ({s.entity_id}): {s.state}")
+            device_states = device_states[:50]
 
-        # --- GỬI REQUEST ---
-        messages = [{"role": "system", "content": system_prompt}]
+        devices_str = "\n".join(device_states)
+
+        # --- 3. TẠO PROMPT HOÀN CHỈNH ---
+        final_system_prompt = f"""{system_instruction}
+
+[Dữ liệu hiện tại]
+{devices_str}
+
+[Quy tắc điều khiển]
+Nếu người dùng muốn thay đổi trạng thái thiết bị (Bật/Tắt/Mở/Khóa...), hãy trả về JSON:
+{{"domain": "tên_domain", "service": "tên_service", "target": ["entity_id"], "response": "Câu trả lời cho người dùng"}}
+
+Ví dụ: {{"domain": "light", "service": "turn_on", "target": ["light.living_room"], "response": "Đã bật đèn."}}
+Nếu không cần điều khiển, hãy trả lời bình thường.
+"""
+
+        # --- 4. GỬI API ---
+        messages = [{"role": "system", "content": final_system_prompt}]
+        
         if encoded_image:
             messages.append({
                 "role": "user",
@@ -122,8 +131,6 @@ class GroqConversationEntity(conversation.ConversationEntity):
         else:
             messages.append({"role": "user", "content": user_text})
 
-        session = async_get_clientsession(hass)
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         payload = {
             "model": model,
             "messages": messages,
@@ -131,30 +138,39 @@ class GroqConversationEntity(conversation.ConversationEntity):
             "temperature": self.entry.options.get(CONF_TEMPERATURE, DEFAULT_TEMPERATURE)
         }
 
+        session = async_get_clientsession(hass)
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         intent_response = intent.IntentResponse(language=user_input.language)
 
         try:
             async with session.post(f"{BASE_URL}/chat/completions", headers=headers, json=payload) as response:
                 if response.status != 200:
-                    intent_response.async_set_speech(f"Lỗi API: {response.status}")
+                    err = await response.text()
+                    intent_response.async_set_speech(f"Lỗi Groq ({response.status}): {err}")
                     return conversation.ConversationResult(response=intent_response)
                 
                 data = await response.json()
                 content = data["choices"][0]["message"]["content"]
 
-                # Xử lý JSON điều khiển
-                if "{" in content and "}" in content:
-                    try:
-                        json_str = content[content.find('{'):content.rfind('}')+1]
-                        cmd = json.loads(json_str)
-                        if "domain" in cmd:
-                            await hass.services.async_call(cmd["domain"], cmd["service"], {"entity_id": cmd["target"]})
-                            content = cmd.get("response", "Đã thực hiện.")
-                    except:
-                        pass
-                
+                # Xử lý JSON Output
+                try:
+                    json_start = content.find('{')
+                    json_end = content.rfind('}') + 1
+                    if json_start != -1 and json_end != -1:
+                        cmd = json.loads(content[json_start:json_end])
+                        if "domain" in cmd and "service" in cmd:
+                            await hass.services.async_call(
+                                cmd["domain"], cmd["service"], 
+                                {"entity_id": cmd["target"]}, blocking=True
+                            )
+                            # Sử dụng câu trả lời từ JSON nếu có
+                            content = cmd.get("response", "Đã thực hiện yêu cầu.")
+                except Exception as e:
+                    _LOGGER.warning(f"Lỗi parse JSON: {e}")
+
                 intent_response.async_set_speech(content)
                 return conversation.ConversationResult(response=intent_response)
+
         except Exception as e:
-            intent_response.async_set_speech(f"Lỗi: {e}")
+            intent_response.async_set_speech(f"Lỗi hệ thống: {e}")
             return conversation.ConversationResult(response=intent_response)
