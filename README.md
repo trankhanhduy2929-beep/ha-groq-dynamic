@@ -28,7 +28,7 @@ Integration mạnh mẽ tích hợp Groq Cloud API vào Home Assistant, biến n
 2.  Nhập **API Key** (Lấy miễn phí tại [console.groq.com](https://console.groq.com)).
 3.  **Quan trọng:** Sau khi thêm xong, bấm vào nút **Configure** của integration:
     * Chọn Model:
-        * Chọn `llama-3.2-11b-vision-preview` (hoặc model có chữ `vision`) nếu muốn dùng tính năng nhìn ảnh/camera.
+        * Chọn `meta-llama/llama-4-scout-17b-16e-instruct` (hoặc model có chữ `vision`) nếu muốn dùng tính năng nhìn ảnh/camera.
         * Chọn `llama-3.3-70b` cho các tác vụ chat thông thường.
     * Chỉnh Max Tokens/Temperature tùy ý.
 
@@ -119,6 +119,7 @@ Tác giả: KHÁNH DUY
 =======
 Tác giả: KHÁNH DUY
 >>>>>>> c601e6fe70626236f70a9da29912fee5c4fbe734
+
 
 
 
