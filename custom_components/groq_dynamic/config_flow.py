@@ -68,36 +68,37 @@ class GroqConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class GroqOptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry):
-        self.config_entry = config_entry
+        # SỬA LỖI TẠI ĐÂY: Không dùng self.config_entry nữa
+        # Đổi tên thành self.entry để tránh xung đột với HA Core
+        self.entry = config_entry
 
     async def async_step_init(self, user_input=None):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        api_key = self.config_entry.data.get(CONF_API_KEY)
+        # Cập nhật các dòng dưới dùng self.entry thay vì self.config_entry
+        api_key = self.entry.data.get(CONF_API_KEY)
         session = async_get_clientsession(self.hass)
         models = await validate_api_key(session, api_key)
         if not models:
             models = ["llama-3.3-70b-versatile", "llama-3.2-11b-vision-preview"]
 
-        # Lấy giá trị hiện tại hoặc mặc định
-        cur_model = self.config_entry.options.get(CONF_MODEL, self.config_entry.data.get(CONF_MODEL))
+        # Lấy giá trị hiện tại
+        cur_model = self.entry.options.get(CONF_MODEL, self.entry.data.get(CONF_MODEL))
         if cur_model not in models: cur_model = models[0]
         
-        cur_prompt = self.config_entry.options.get(CONF_System_PROMPT, DEFAULT_SYSTEM_PROMPT)
-        cur_entities = self.config_entry.options.get(CONF_SELECTED_ENTITIES, [])
-        cur_tokens = self.config_entry.options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS)
-        cur_temp = self.config_entry.options.get(CONF_TEMPERATURE, DEFAULT_TEMPERATURE)
+        cur_prompt = self.entry.options.get(CONF_System_PROMPT, DEFAULT_SYSTEM_PROMPT)
+        cur_entities = self.entry.options.get(CONF_SELECTED_ENTITIES, [])
+        cur_tokens = self.entry.options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS)
+        cur_temp = self.entry.options.get(CONF_TEMPERATURE, DEFAULT_TEMPERATURE)
 
         schema = vol.Schema({
             vol.Required(CONF_MODEL, default=cur_model): vol.In(models),
             
-            # Tùy chỉnh nhân cách AI
             vol.Optional(CONF_System_PROMPT, default=cur_prompt): TextSelector(
                 TextSelectorConfig(multiline=True)
             ),
             
-            # Chọn thiết bị được phép điều khiển (Multiple Select)
             vol.Optional(CONF_SELECTED_ENTITIES, default=cur_entities): EntitySelector(
                 EntitySelectorConfig(multiple=True)
             ),
