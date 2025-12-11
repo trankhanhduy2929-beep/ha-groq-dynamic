@@ -61,7 +61,7 @@ action:
 2. Camera Vision (Nhìn và mô tả)
 Khi nhắc đến entity_id hoặc tên camera trong câu lệnh, AI sẽ tự động chụp ảnh từ camera đó để phân tích.
 
-Yêu cầu: Phải chọn model Vision (ví dụ: llama-3.2-11b-vision-preview) trong cấu hình.
+Yêu cầu: Phải chọn model Vision (ví dụ: model meta-llama/llama-4-scout-17b-16e-instruct) trong cấu hình.
 
 YAML
 
@@ -119,5 +119,6 @@ Tác giả: KHÁNH DUY
 =======
 Tác giả: KHÁNH DUY
 >>>>>>> c601e6fe70626236f70a9da29912fee5c4fbe734
+
 
 
