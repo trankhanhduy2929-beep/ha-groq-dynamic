@@ -46,7 +46,9 @@ class GroqConversationEntity(conversation.ConversationEntity):
         encoded_image = None
         image_source_info = ""
 
-       
+        # --- ƯU TIÊN 1: TÌM URL HOẶC FILE PATH TRONG TEXT ---
+        # Regex tìm link http hoặc đường dẫn tuyệt đối bắt đầu bằng /
+        # Ví dụ: https://...jpg hoặc /config/www/...jpg
         url_pattern = re.search(r'(https?://\S+|/\S+\.(?:jpg|jpeg|png))', user_text, re.IGNORECASE)
         
         if url_pattern:
@@ -54,7 +56,7 @@ class GroqConversationEntity(conversation.ConversationEntity):
             _LOGGER.info(f"Phát hiện ảnh từ nguồn: {path_or_url}")
             
             try:
-
+                # Xử lý nếu là URL Online
                 if path_or_url.startswith("http"):
                     async with aiohttp.ClientSession() as session:
                         async with session.get(path_or_url) as resp:
@@ -63,9 +65,9 @@ class GroqConversationEntity(conversation.ConversationEntity):
                                 encoded_image = base64.b64encode(image_data).decode("utf-8")
                                 image_source_info = " (ảnh từ URL)"
                 
-              
+                # Xử lý nếu là File Local (trong thư mục config)
                 elif path_or_url.startswith("/"):
-                   
+                    # Kiểm tra file có tồn tại không
                     if os.path.exists(path_or_url):
                         def read_file():
                             with open(path_or_url, "rb") as f:
@@ -79,7 +81,7 @@ class GroqConversationEntity(conversation.ConversationEntity):
             except Exception as e:
                 _LOGGER.error(f"Lỗi đọc ảnh từ URL/File: {e}")
 
-
+        # --- ƯU TIÊN 2: NẾU KHÔNG CÓ URL, TÌM CAMERA ---
         if not encoded_image:
             all_cameras = hass.states.async_all("camera")
             user_text_lower = user_text.lower()
@@ -95,19 +97,19 @@ class GroqConversationEntity(conversation.ConversationEntity):
                     except Exception as e:
                         _LOGGER.error(f"Lỗi chụp camera: {e}")
 
-       
+        # --- TẠO SYSTEM PROMPT ---
         system_prompt = "Bạn là trợ lý AI thông minh."
         if encoded_image:
             system_prompt += f" Người dùng đang gửi kèm một bức ảnh{image_source_info}. Hãy trả lời dựa trên ảnh đó."
         
-   
+        # Danh sách thiết bị (giữ nguyên tính năng điều khiển)
         domains = ["light", "switch", "fan", "cover", "climate"]
         states = hass.states.async_all()
         devs = [f"{s.name} ({s.entity_id}): {s.state}" for s in states if s.domain in domains][:50]
         system_prompt += f"\nThiết bị: {', '.join(devs)}"
         system_prompt += '\nNếu cần điều khiển, trả về JSON: {"domain": "...", "service": "...", "target": ["..."], "response": "..."}'
 
- 
+        # --- GỬI REQUEST ---
         messages = [{"role": "system", "content": system_prompt}]
         if encoded_image:
             messages.append({
@@ -140,7 +142,7 @@ class GroqConversationEntity(conversation.ConversationEntity):
                 data = await response.json()
                 content = data["choices"][0]["message"]["content"]
 
-            
+                # Xử lý JSON điều khiển
                 if "{" in content and "}" in content:
                     try:
                         json_str = content[content.find('{'):content.rfind('}')+1]
