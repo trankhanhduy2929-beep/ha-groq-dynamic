@@ -1,7 +1,7 @@
 {
   "domain": "groq_dynamic",
   "name": "Groq Dynamic AI",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "documentation": "https://github.com/trankhanhduy2929-beep/ha-groq-dynamic",
   "requirements": [],
   "dependencies": [],
